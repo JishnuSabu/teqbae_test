@@ -6,14 +6,12 @@ import 'package:teqbae_test/controller/provider/dashboard_provider.dart';
 import 'package:teqbae_test/controller/provider/theme/theme_provider.dart';
 import 'package:teqbae_test/controller/service/theme/theme_service.dart';
 import 'package:teqbae_test/core/constants/assets/const_svg.dart';
-import 'package:teqbae_test/core/network/mock_http_server.dart';
 import 'package:teqbae_test/core/routes/route_names.dart';
 import 'package:teqbae_test/core/themes/color/color_theme_genarator.dart';
 import 'package:teqbae_test/core/themes/text/app_text.dart';
 import 'package:teqbae_test/core/utils/ui_utils.dart';
 import 'package:teqbae_test/core/widgets/custom_profile_bar.dart';
 import 'package:teqbae_test/view/dashboard/widgets/sync_status_banner.dart';
-import 'package:teqbae_test/view/settings/widgets/mock_scenario_dialog.dart';
 import 'package:teqbae_test/view/settings/widgets/theme_bottom_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -86,38 +84,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   showArrow: false,
                   onTap: () {
                     showThemeMenu(context);
-                  },
-                ),
-                _buildDivider(context),
-                _buildSettingsTile(
-                  context: context,
-                  icon: Icons.science_outlined,
-                  title: "Mock API Scenarios",
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      UiUtils.textWidgetCard(
-                        context: context,
-                        title: MockHttpServer.activeScenario.name,
-                        styleType: TextStyleType.smallSemiBold,
-                        color: context.primaryGreyColor,
-                      ),
-                      SizedBox(width: 8.rw(context)),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 14.rf(context),
-                        color: context.primaryGreyColor,
-                      ),
-                    ],
-                  ),
-                  showArrow: false,
-                  onTap: () {
-                    showMockScenarioDialog(
-                      context,
-                      onScenarioChanged: () {
-                        setState(() {});
-                      },
-                    );
                   },
                 ),
               ],

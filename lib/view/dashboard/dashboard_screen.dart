@@ -67,52 +67,60 @@ class DashboardScreen extends StatelessWidget {
       return _buildLoadingState(context);
     }
 
-    return RefreshIndicator(
-      onRefresh: () => _loadData(context),
-      color: context.themeColor,
-      backgroundColor: context.mainCardColor,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
+    return Column(
+      children: [
+        // ── Fixed Top Header + Attendance Action Card (Never scrolls) ──
+        Stack(
+          alignment: Alignment.topCenter,
           children: [
-            Column(
-              children: [
-                Stack(
-                  children: [
-                    SizedBox(
-                      height: 200.rh(context),
-                      width: double.infinity,
-                      child: UiUtils.getAssetimage(
-                        ConstImages.header,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      ),
-                    ),
-                    SafeArea(
-                      child: CustomProfileBar(
-                        employee: employee,
-                      ),
-                    ),
-                  ],
-                ),
-                Transform.translate(
-                  offset: Offset(0, -70.rh(context)),
-                  child: Column(
-                    children: [
-                      const AttendanceActionCard(),
-                      SizedBox(height: 12.rh(context)),
-                      const LeaveBalanceCard(),
-                      SizedBox(height: 12.rh(context)),
-                      const RecentAttendanceList(),
-                    ],
+            SizedBox(
+              height: 200.rh(context),
+              width: double.infinity,
+              child: UiUtils.getAssetimage(
+                ConstImages.header,
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
+            ),
+            SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CustomProfileBar(
+                    employee: employee,
                   ),
-                ),
-                SizedBox(height: 20.rh(context)),
-              ],
+                  SizedBox(height: 8.rh(context)),
+                  const AttendanceActionCard(),
+                ],
+              ),
             ),
           ],
         ),
-      ),
+
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _loadData(context),
+            color: context.themeColor,
+            backgroundColor: context.mainCardColor,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                top: 12.rh(context),
+                bottom: 90.rh(context),
+              ),
+              child: Column(
+                children: [
+                  const LeaveBalanceCard(),
+                  SizedBox(height: 14.rh(context)),
+                  const RecentAttendanceList(),
+                  SizedBox(height: 20.rh(context)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

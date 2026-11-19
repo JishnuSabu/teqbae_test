@@ -24,7 +24,6 @@ class LeaveBalanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -62,10 +61,7 @@ class LeaveBalanceCard extends StatelessWidget {
               ),
             ],
           ),
-
           SizedBox(height: 10.rh(context)),
-
-          // Leave balance cards
           Row(
             children: [
               Expanded(
@@ -99,17 +95,14 @@ class LeaveBalanceCard extends StatelessWidget {
               ),
             ],
           ),
-
           SizedBox(height: 12.rh(context)),
-
-          // Apply leave
           CustomButtonWidget(
             title: "Apply for Leave",
             useIcon: true,
             buttonIcon: ConstSvgIcons.applyLeave,
-            buttonIconColor: Colors.white,
+            buttonIconColor: context.whiteColor,
             bottonColor: context.themeColor,
-            titleColor: Colors.white,
+            titleColor: context.whiteColor,
             height: 46.rh(context),
             borderRadius: 10.rf(context),
             onTap: () {

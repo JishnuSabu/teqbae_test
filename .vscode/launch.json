@@ -2,26 +2,24 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Staging Run (No Debug)",
+      "name": "HRMS",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main_staging.dart",
-      "args": [
-        "--flavor",
-        "staging"
-      ],
-      "noDebug": true
+      "program": "lib/main.dart"
     },
     {
-      "name": "Production Run (No Debug)",
+      "name": "HRMS (Profile Mode)",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main_production.dart",
-      "args": [
-        "--flavor",
-        "production"
-      ],
-      "noDebug": true
+      "program": "lib/main.dart",
+      "flutterMode": "profile"
+    },
+    {
+      "name": "HRMS (Release Mode)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "flutterMode": "release"
     }
   ]
 }

@@ -105,7 +105,6 @@ class AttendanceActionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row: "Todays Overview" + Live Timer Badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -140,10 +139,7 @@ class AttendanceActionCard extends StatelessWidget {
                 _badge(context, color: context.themeColor, label: "Completed"),
             ],
           ),
-
           SizedBox(height: 12.rh(context)),
-
-          // Two-Column Check In / Check Out Card using standard secondCardColor
           Container(
             padding: EdgeInsets.symmetric(
               vertical: 12.rh(context),
@@ -155,7 +151,6 @@ class AttendanceActionCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Check In Column
                 Expanded(
                   child: InkWell(
                     onTap: (status == 'not_checked_in' && !isProcessing)
@@ -192,7 +187,8 @@ class AttendanceActionCard extends StatelessWidget {
                           SizedBox(height: 2.rh(context)),
                           UiUtils.textWidgetCard(
                             context: context,
-                            title: checkInTime ?? (attendanceProvider.shiftStartTime ?? "--:--"),
+                            title: checkInTime ??
+                                (attendanceProvider.shiftStartTime ?? "--:--"),
                             styleType: TextStyleType.smallSemiBold,
                             fz: 16.rf(context),
                             color: context.textColor2,
@@ -232,8 +228,6 @@ class AttendanceActionCard extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // Vertical Divider
                 SizedBox(
                   height: 70.rh(context),
                   child: VerticalDivider(
@@ -241,8 +235,6 @@ class AttendanceActionCard extends StatelessWidget {
                     thickness: 1,
                   ),
                 ),
-
-                // Check Out Column
                 Expanded(
                   child: InkWell(
                     onTap: (status == 'checked_in' && !isProcessing)
@@ -331,10 +323,7 @@ class AttendanceActionCard extends StatelessWidget {
               ],
             ),
           ),
-
           SizedBox(height: 10.rh(context)),
-
-          // Geofence status tag
           Row(
             children: [
               Icon(

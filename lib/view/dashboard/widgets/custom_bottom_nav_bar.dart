@@ -93,7 +93,7 @@ class CustomBottomNavBar extends StatelessWidget {
           children: [
             UiUtils.getSvg(
               isActive ? imageActive : image,
-              color: isActive ? Colors.white : context.bottomBarSvgColor,
+              color: isActive ? context.whiteColor : context.bottomBarSvgColor,
               height: 20.rh(context),
               width: 20.rw(context),
             ),
@@ -103,7 +103,7 @@ class CustomBottomNavBar extends StatelessWidget {
                 title: label,
                 context: context,
                 styleType: TextStyleType.smallBold,
-                color: Colors.white,
+                color: context.whiteColor,
               ),
             ],
           ],

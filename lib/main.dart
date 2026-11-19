@@ -27,6 +27,7 @@ void runMainApp() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LocalStorageService.init();
   await MockHttpServer.start(port: 8085);
   BaseUrl.basePathUrl = MockHttpServer.baseUrl;
   runMainApp();

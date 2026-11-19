@@ -67,8 +67,10 @@ class LeaveProvider extends ChangeNotifier {
     final cachedBal = LocalStorageService.getLeaveBalance();
     if (cachedBal != null) _leaveBalance = cachedBal;
 
-    final cachedReqs = LocalStorageService.getLeaveRequests();
-    if (cachedReqs.isNotEmpty) _leaveRequests = cachedReqs;
+    final cachedReqs = LocalStorageService.getLeaveRequests()
+        .where((r) => r.id != 'req-001' && r.id != 'req-002')
+        .toList();
+    _leaveRequests = cachedReqs;
   }
 
   void setLeaveType(String type) {
@@ -108,6 +110,9 @@ class LeaveProvider extends ChangeNotifier {
     leaveRequestsResponse = ApiResponse.loading();
     notifyListeners();
 
+    // Load from cache first for instant offline/cached viewing
+    _loadFromCache();
+
     try {
       final results = await Future.wait([
         LeaveService.getLeaveBalance(),
@@ -120,9 +125,15 @@ class LeaveProvider extends ChangeNotifier {
         await LocalStorageService.saveLeaveBalance(_leaveBalance);
       }
 
-      final requests = results[1] as List<LeaveRequestModel>?;
-      if (requests != null) {
-        _leaveRequests = requests;
+      final rawRequests = results[1] as List<LeaveRequestModel>?;
+      if (rawRequests != null) {
+        final requests = rawRequests
+            .where((r) => r.id != 'req-001' && r.id != 'req-002')
+            .toList();
+        final serverIds = requests.map((r) => r.id).toSet();
+        final localOnly =
+            _leaveRequests.where((r) => !serverIds.contains(r.id)).toList();
+        _leaveRequests = [...requests, ...localOnly];
         await LocalStorageService.saveLeaveRequests(_leaveRequests);
       }
 
@@ -240,6 +251,13 @@ class LeaveProvider extends ChangeNotifier {
 
       if (response != null && response['status'] == true) {
         clearForm();
+        if (response['request'] is Map<String, dynamic>) {
+          final newReq = LeaveRequestModel.fromJson(
+              response['request'] as Map<String, dynamic>);
+          _leaveRequests.removeWhere((r) => r.id == newReq.id);
+          _leaveRequests.insert(0, newReq);
+          await LocalStorageService.saveLeaveRequests(_leaveRequests);
+        }
         await fetchLeaveData();
         return LeaveSubmissionResult(
           isSuccess: true,

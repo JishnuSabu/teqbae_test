@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:intl/intl.dart';
+import 'package:teqbae_test/core/services/local_storage/local_storage_service.dart';
+import 'package:teqbae_test/model/leave/leave_balance_model.dart';
+import 'package:teqbae_test/model/leave/leave_request_model.dart';
 
 enum MockScenario {
   normal,
@@ -44,26 +47,7 @@ class MockHttpServer {
     "check_out_timestamp": null,
   };
 
-  static List<Map<String, dynamic>> attendanceRecords = [
-    {
-      "id": "att-001",
-      "date": DateFormat('yyyy-MM-dd')
-          .format(DateTime.now().subtract(const Duration(days: 1))),
-      "check_in": "09:05 AM",
-      "check_out": "06:10 PM",
-      "duration": "9h 5m",
-      "sync_status": "synced",
-    },
-    {
-      "id": "att-002",
-      "date": DateFormat('yyyy-MM-dd')
-          .format(DateTime.now().subtract(const Duration(days: 2))),
-      "check_in": "09:12 AM",
-      "check_out": "06:18 PM",
-      "duration": "9h 6m",
-      "sync_status": "synced",
-    },
-  ];
+  static List<Map<String, dynamic>> attendanceRecords = [];
 
   static final Set<String> processedIdempotencyKeys = {};
 
@@ -73,28 +57,7 @@ class MockHttpServer {
     "total": 15,
   };
 
-  static List<Map<String, dynamic>> leaveRequests = [
-    {
-      "id": "req-001",
-      "leave_type": "Casual",
-      "start_date": "2026-12-10",
-      "end_date": "2026-12-15",
-      "days": 6,
-      "reason": "Family vacation planned in advance",
-      "status": "Approved",
-      "applied_at": "2026-11-15 10:30 AM",
-    },
-    {
-      "id": "req-002",
-      "leave_type": "Sick",
-      "start_date": "2026-11-05",
-      "end_date": "2026-11-06",
-      "days": 2,
-      "reason": "Viral fever recovery",
-      "status": "Approved",
-      "applied_at": "2026-11-04 08:45 AM",
-    },
-  ];
+  static List<Map<String, dynamic>> leaveRequests = [];
 
   static void resetData() {
     activeScenario = MockScenario.normal;
@@ -114,8 +77,47 @@ class MockHttpServer {
     log("🔄 [MockHttpServer] In-memory database reset to initial values.");
   }
 
+  static void loadPersistedData() {
+    try {
+      final savedToday = LocalStorageService.getTodayAttendance();
+      if (savedToday != null) {
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        if (savedToday['date'] == todayStr) {
+          todayAttendance = Map<String, dynamic>.from(savedToday);
+        }
+      }
+      final savedHistory = LocalStorageService.getAttendanceHistory();
+      if (savedHistory.isNotEmpty) {
+        final realHistory = savedHistory
+            .where((r) => r.id != 'att-001' && r.id != 'att-002')
+            .toList();
+        attendanceRecords = realHistory.map((r) => r.toJson()).toList();
+        LocalStorageService.saveAttendanceHistory(realHistory);
+      } else {
+        attendanceRecords = [];
+      }
+      final savedLeaveBalance = LocalStorageService.getLeaveBalance();
+      if (savedLeaveBalance != null && savedLeaveBalance.total > 0) {
+        leaveBalance = savedLeaveBalance.toJson();
+      }
+      final savedLeaveRequests = LocalStorageService.getLeaveRequests();
+      if (savedLeaveRequests.isNotEmpty) {
+        final realRequests = savedLeaveRequests
+            .where((r) => r.id != 'req-001' && r.id != 'req-002')
+            .toList();
+        leaveRequests = realRequests.map((r) => r.toJson()).toList();
+        LocalStorageService.saveLeaveRequests(realRequests);
+      } else {
+        leaveRequests = [];
+      }
+    } catch (e) {
+      log("Error loading persisted mock data: $e");
+    }
+  }
+
   /// Start the local mock HTTP server
   static Future<void> start({int port = 8085}) async {
+    loadPersistedData();
     if (_server != null) return;
     _port = port;
 
@@ -268,17 +270,36 @@ class MockHttpServer {
           todayAttendance['today_status'] = 'checked_in';
           todayAttendance['check_in_time'] = formattedTime;
           todayAttendance['check_in_timestamp'] = now.toIso8601String();
+
+          attendanceRecords.removeWhere((r) => r['date'] == todayStr);
+          attendanceRecords.insert(0, {
+            "id": idempotencyKey ?? "att_${now.millisecondsSinceEpoch}",
+            "date": todayStr,
+            "check_in": formattedTime,
+            "check_out": null,
+            "duration": "In Progress",
+            "sync_status": "synced",
+          });
         } else if (eventType == 'check_out') {
+          final checkInTs = todayAttendance['check_in_timestamp']?.toString();
+          final checkInDt =
+              checkInTs != null ? DateTime.tryParse(checkInTs) : null;
+          final durationDiff =
+              checkInDt != null ? now.difference(checkInDt) : Duration.zero;
+          final durationStr =
+              "${durationDiff.inHours}h ${durationDiff.inMinutes % 60}m";
+
           todayAttendance['today_status'] = 'checked_out';
           todayAttendance['check_out_time'] = formattedTime;
           todayAttendance['check_out_timestamp'] = now.toIso8601String();
 
+          attendanceRecords.removeWhere((r) => r['date'] == todayStr);
           attendanceRecords.insert(0, {
             "id": idempotencyKey ?? "att_${now.millisecondsSinceEpoch}",
             "date": todayStr,
             "check_in": todayAttendance['check_in_time'] ?? formattedTime,
             "check_out": formattedTime,
-            "duration": "8h 0m",
+            "duration": durationStr,
             "sync_status": "synced",
           });
         }
@@ -349,6 +370,16 @@ class MockHttpServer {
           leaveBalance['sick'] =
               ((leaveBalance['sick'] as int) - days).clamp(0, 99);
         }
+        leaveBalance['total'] =
+            (leaveBalance['casual'] as int) + (leaveBalance['sick'] as int);
+
+        // Persist to local storage immediately
+        await LocalStorageService.saveLeaveRequests(
+          leaveRequests.map((e) => LeaveRequestModel.fromJson(e)).toList(),
+        );
+        await LocalStorageService.saveLeaveBalance(
+          LeaveBalanceModel.fromJson(leaveBalance),
+        );
 
         _sendJson(req, HttpStatus.created, {
           "status": true,
@@ -377,6 +408,25 @@ class MockHttpServer {
         _sendJson(req, HttpStatus.ok, {
           "status": true,
           "message": "Database reset to initial mock state.",
+        });
+        return;
+      }
+
+      // Reviewer: set GPS simulation mode on the client
+      // POST /reviewer/location  body: { "mode": "atOffice" | "outsideOffice" | "realGps" | "permissionDenied" | "permanentlyDenied" | "serviceDisabled" }
+      if (method == "POST" && path == "/reviewer/location") {
+        _sendJson(req, HttpStatus.ok, {
+          "status": true,
+          "message":
+              "Location simulation is controlled via LocationService.simulationMode in the client. Set it in location_service.dart or the in-app Settings > Mock Scenarios panel.",
+          "available_modes": [
+            "atOffice",
+            "outsideOffice",
+            "realGps",
+            "permissionDenied",
+            "permanentlyDenied",
+            "serviceDisabled",
+          ],
         });
         return;
       }

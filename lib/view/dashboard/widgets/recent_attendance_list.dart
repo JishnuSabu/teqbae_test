@@ -101,7 +101,7 @@ class RecentAttendanceList extends StatelessWidget {
     final statusText = _getStatusLabel(record.syncStatus);
 
     return Container(
-      padding: EdgeInsets.all(14.rf(context)),
+      padding: EdgeInsets.all(10.rf(context)),
       decoration: BoxDecoration(
         color: context.mainCardColor,
         borderRadius: BorderRadius.circular(12.rf(context)),
@@ -159,7 +159,7 @@ class RecentAttendanceList extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 10.rh(context)),
+          SizedBox(height: 3.rh(context)),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [

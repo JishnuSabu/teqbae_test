@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_packages/flutter_local_packages.dart';
 import 'package:teqbae_test/controller/provider/attendance/attendance_provider.dart';
+import 'package:teqbae_test/controller/provider/dashboard_provider.dart';
 import 'package:teqbae_test/core/sync/sync_service.dart';
 import 'package:teqbae_test/core/themes/color/color_theme_genarator.dart';
 import 'package:teqbae_test/core/utils/ui_utils.dart';
@@ -70,12 +71,23 @@ class SyncStatusBanner extends StatelessWidget {
                       final result =
                           await attendanceProvider.triggerManualSync();
                       if (context.mounted) {
-                        UiUtils.showSnackBarMessage(
-                          context,
-                          result.message,
-                          isSuccess:
-                              result.syncedCount > 0 || result.totalCount == 0,
-                        );
+                        await context
+                            .read<DashboardProvider>()
+                            .fetchDashboardData();
+                        await Future.wait([
+                          context
+                              .read<DashboardProvider>()
+                              .fetchDashboardData(),
+                          attendanceProvider.fetchAttendanceHistory(),
+                        ]);
+                        if (context.mounted) {
+                          UiUtils.showSnackBarMessage(
+                            context,
+                            result.message,
+                            isSuccess: result.syncedCount > 0 ||
+                                result.totalCount == 0,
+                          );
+                        }
                       }
                     },
               style: ElevatedButton.styleFrom(

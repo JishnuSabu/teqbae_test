@@ -65,20 +65,80 @@ class AttendanceProvider extends ChangeNotifier {
 
   void _loadFromLocalStorage() {
     _pendingEvents = LocalStorageService.getPendingEvents();
-    _records = LocalStorageService.getAttendanceHistory();
+    _records = LocalStorageService.getAttendanceHistory()
+        .where((r) => r.id != 'att-001' && r.id != 'att-002')
+        .toList();
+
+    final todayDateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     final todayData = LocalStorageService.getTodayAttendance();
     if (todayData != null) {
       final savedDate = todayData['date']?.toString();
-      final todayDateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       if (savedDate == todayDateStr) {
-        _todayStatus = todayData['today_status']?.toString() ?? 'not_checked_in';
+        _todayStatus =
+            todayData['today_status']?.toString() ?? 'not_checked_in';
         _checkInTime = todayData['check_in_time']?.toString();
         _checkOutTime = todayData['check_out_time']?.toString();
 
         final checkInTimestamp = todayData['check_in_timestamp']?.toString();
         if (checkInTimestamp != null && checkInTimestamp.isNotEmpty) {
-          _checkInDateTime = DateTime.tryParse(checkInTimestamp);
+          _checkInDateTime = DateTime.tryParse(checkInTimestamp)?.toLocal();
+        }
+      } else {
+        // New day — reset today's state but keep history
+        _todayStatus = 'not_checked_in';
+        _checkInTime = null;
+        _checkOutTime = null;
+        _checkInDateTime = null;
+      }
+    }
+
+    // If today status is not checked in, check if history has today's record
+    if (_todayStatus == 'not_checked_in') {
+      final todayRecordIndex =
+          _records.indexWhere((r) => r.date == todayDateStr);
+      if (todayRecordIndex >= 0) {
+        final rec = _records[todayRecordIndex];
+        if (rec.checkOut != null && rec.checkOut!.isNotEmpty) {
+          _todayStatus = 'checked_out';
+          _checkInTime = rec.checkIn;
+          _checkOutTime = rec.checkOut;
+        } else if (rec.checkIn != null && rec.checkIn!.isNotEmpty) {
+          _todayStatus = 'checked_in';
+          _checkInTime = rec.checkIn;
+        }
+      }
+    }
+
+    // Also hydrate today's status from pending events if any
+    if (_todayStatus == 'not_checked_in' && _pendingEvents.isNotEmpty) {
+      final todayEvents =
+          _pendingEvents.where((e) => e.date == todayDateStr).toList()
+            ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      if (todayEvents.isNotEmpty) {
+        final lastEvent = todayEvents.last;
+        if (lastEvent.eventType == 'check_in') {
+          _todayStatus = 'checked_in';
+          _checkInDateTime ??=
+              DateTime.tryParse(lastEvent.timestamp)?.toLocal();
+          _checkInTime ??= _checkInDateTime != null
+              ? DateFormat('hh:mm a').format(_checkInDateTime!)
+              : null;
+        } else if (lastEvent.eventType == 'check_out') {
+          _todayStatus = 'checked_out';
+          final checkInEvent = todayEvents.firstWhere(
+              (e) => e.eventType == 'check_in',
+              orElse: () => lastEvent);
+          _checkInDateTime ??=
+              DateTime.tryParse(checkInEvent.timestamp)?.toLocal();
+          _checkInTime ??= _checkInDateTime != null
+              ? DateFormat('hh:mm a').format(_checkInDateTime!)
+              : null;
+          final checkOutDt =
+              DateTime.tryParse(lastEvent.timestamp)?.toLocal();
+          _checkOutTime ??= checkOutDt != null
+              ? DateFormat('hh:mm a').format(checkOutDt)
+              : null;
         }
       }
     }
@@ -90,9 +150,16 @@ class AttendanceProvider extends ChangeNotifier {
     _elapsedTimer?.cancel();
     if (_todayStatus == 'checked_in' && _checkInDateTime != null) {
       _elapsedWorkingDuration = DateTime.now().difference(_checkInDateTime!);
+      if (_elapsedWorkingDuration.isNegative) {
+        _elapsedWorkingDuration = Duration.zero;
+      }
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (_checkInDateTime != null) {
-          _elapsedWorkingDuration = DateTime.now().difference(_checkInDateTime!);
+          _elapsedWorkingDuration =
+              DateTime.now().difference(_checkInDateTime!);
+          if (_elapsedWorkingDuration.isNegative) {
+            _elapsedWorkingDuration = Duration.zero;
+          }
           notifyListeners();
         }
       });
@@ -101,42 +168,86 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  /// Fetch latest attendance history and today's status from mock API
+  /// Fetch latest attendance history and today's status from mock API.
+  /// Cache-first strategy: local today data wins over server when
+  /// the server has less information (e.g. after a mock-server restart).
   Future<void> fetchAttendanceHistory() async {
     attendanceHistoryResponse = ApiResponse.loading();
     notifyListeners();
 
+    // Always load from cache first so UI is instant
+    _loadFromLocalStorage();
+
     try {
       final data = await AttendanceService.getAttendance();
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
       if (data != null) {
+        // ── Today's status ──
         if (data['today'] is Map<String, dynamic>) {
           final today = data['today'] as Map<String, dynamic>;
-          _todayStatus = today['today_status']?.toString() ?? 'not_checked_in';
-          _checkInTime = today['check_in_time']?.toString();
-          _checkOutTime = today['check_out_time']?.toString();
+          final serverStatus =
+              today['today_status']?.toString() ?? 'not_checked_in';
+
+          final serverHasData = serverStatus == 'checked_in' ||
+              serverStatus == 'checked_out';
+
+          if (serverHasData) {
+            _todayStatus = serverStatus;
+            _checkInTime = today['check_in_time']?.toString() ?? _checkInTime;
+            _checkOutTime =
+                today['check_out_time']?.toString() ?? _checkOutTime;
+            final serverTs = today['check_in_timestamp']?.toString();
+            if (serverTs != null && serverTs.isNotEmpty) {
+              _checkInDateTime =
+                  DateTime.tryParse(serverTs)?.toLocal() ?? _checkInDateTime;
+            }
+          }
         }
 
+        // ── Attendance history: merge server records with local today record ──
         if (data['records'] is List) {
-          _records = (data['records'] as List).map((item) {
-            return AttendanceRecord.fromJson(item as Map<String, dynamic>);
-          }).toList();
+          final serverRecords = (data['records'] as List)
+              .map((item) =>
+                  AttendanceRecord.fromJson(item as Map<String, dynamic>))
+              .where((r) => r.id != 'att-001' && r.id != 'att-002')
+              .toList();
+
+          final todayRecordIndex =
+              _records.indexWhere((r) => r.date == todayStr);
+          AttendanceRecord? localTodayRecord;
+          if (todayRecordIndex >= 0) {
+            localTodayRecord = _records[todayRecordIndex];
+          }
+
+          serverRecords.removeWhere((r) => r.date == todayStr);
+
+          if (localTodayRecord != null) {
+            _records = [localTodayRecord, ...serverRecords];
+          } else {
+            _records = serverRecords;
+          }
+
           await LocalStorageService.saveAttendanceHistory(_records);
         }
       }
 
+      // Persist the reconciled today data
       await LocalStorageService.saveTodayAttendance({
-        'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        'date': todayStr,
         'today_status': _todayStatus,
         'check_in_time': _checkInTime,
         'check_out_time': _checkOutTime,
         'check_in_timestamp': _checkInDateTime?.toIso8601String(),
+        'duration': _todayStatus == 'checked_out'
+            ? (_records.isNotEmpty ? _records.first.duration : null)
+            : (_todayStatus == 'checked_in' ? 'In Progress' : null),
       });
 
-      _loadFromLocalStorage();
+      _updateElapsedTimer();
       attendanceHistoryResponse = ApiResponse.success(_records);
     } catch (e) {
       log("AttendanceProvider fetchAttendanceHistory error: $e");
-      _loadFromLocalStorage();
       attendanceHistoryResponse = ApiResponse.error(
         _records.isNotEmpty
             ? "Offline Mode: Showing cached attendance"
@@ -214,13 +325,27 @@ class AttendanceProvider extends ChangeNotifier {
       _checkInDateTime = now;
       _updateElapsedTimer();
 
+      // Immediately add/update today's record in history
+      final todayRecord = AttendanceRecord(
+        id: idempotencyKey,
+        date: todayStr,
+        checkIn: formattedTime,
+        checkOut: null,
+        duration: "In Progress",
+        syncStatus: AttendanceSyncStatus.pending,
+      );
+      _records.removeWhere((r) => r.date == todayStr);
+      _records.insert(0, todayRecord);
+
       await LocalStorageService.addPendingEvent(event);
+      await LocalStorageService.saveAttendanceHistory(_records);
       await LocalStorageService.saveTodayAttendance({
         'date': todayStr,
         'today_status': 'checked_in',
         'check_in_time': formattedTime,
         'check_out_time': null,
         'check_in_timestamp': now.toIso8601String(),
+        'duration': "In Progress",
       });
 
       _loadFromLocalStorage();
@@ -306,26 +431,28 @@ class AttendanceProvider extends ChangeNotifier {
         date: todayStr,
       );
 
-      final duration = _checkInDateTime != null
-          ? now.difference(_checkInDateTime!)
-          : const Duration(hours: 8);
+      Duration duration = Duration.zero;
+      if (_checkInDateTime != null) {
+        duration = now.difference(_checkInDateTime!);
+        if (duration.isNegative) duration = Duration.zero;
+      }
       final durationStr = "${duration.inHours}h ${duration.inMinutes % 60}m";
 
       _todayStatus = 'checked_out';
       _checkOutTime = formattedTime;
       _elapsedTimer?.cancel();
+      _elapsedWorkingDuration = duration;
 
-      _records.insert(
-        0,
-        AttendanceRecord(
-          id: idempotencyKey,
-          date: todayStr,
-          checkIn: _checkInTime,
-          checkOut: formattedTime,
-          duration: durationStr,
-          syncStatus: AttendanceSyncStatus.pending,
-        ),
+      final todayRecord = AttendanceRecord(
+        id: idempotencyKey,
+        date: todayStr,
+        checkIn: _checkInTime,
+        checkOut: formattedTime,
+        duration: durationStr,
+        syncStatus: AttendanceSyncStatus.pending,
       );
+      _records.removeWhere((r) => r.date == todayStr);
+      _records.insert(0, todayRecord);
 
       await LocalStorageService.addPendingEvent(event);
       await LocalStorageService.saveAttendanceHistory(_records);
