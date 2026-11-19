@@ -1,0 +1,30 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = false
+	logallrefupdates = true
+	symlinks = false
+	ignorecase = true
+[submodule]
+	active = .
+[remote "origin"]
+	url = https://github.com/JishnuSabu/teqbae_test.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+	remote = origin
+	merge = refs/heads/main
+[branch "sreelxmi_hrms_dev"]
+	remote = origin
+	merge = refs/heads/sreelxmi_hrms_dev
+	vscode-merge-base = origin/sreelxmi_hrms_dev
+[branch "sree_dev"]
+	remote = origin
+	merge = refs/heads/sree_dev
+	vscode-merge-base = origin/sree_dev
+[branch "jishnu_dev"]
+	remote = origin
+	merge = refs/heads/jishnu_dev
+	vscode-merge-base = origin/jishnu_dev
+[user]
+	name = JishnuSabu
+	email = jishnu12345sabu@gmail.com

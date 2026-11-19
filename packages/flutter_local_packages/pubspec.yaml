@@ -1,0 +1,11 @@
+name: flutter_local_packages
+description: Local helper package for responsive UI sizing.
+version: 0.0.1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
