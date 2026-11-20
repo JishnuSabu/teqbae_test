@@ -123,7 +123,12 @@ class AppTextStyles {
       required Color clr,
     }) {
       return GoogleFonts.inter(
-        textStyle: TextStyle(fontWeight: fw, fontSize: size, color: clr),
+        textStyle: TextStyle(
+          fontWeight: fw,
+          fontSize: size,
+          color: clr,
+          fontFamilyFallback: const ['Roboto', 'sans-serif', 'Arial'],
+        ),
       );
     }
 

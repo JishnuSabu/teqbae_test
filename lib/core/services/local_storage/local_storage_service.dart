@@ -43,6 +43,32 @@ class LocalStorageService {
     return await _prefs.remove(key);
   }
 
+  // ----------------- CONFIGURABLE OFFICE LOCATION -----------------
+
+  static double getOfficeLatitude() {
+    return _prefs.getDouble('cfg_office_latitude') ?? 12.9716;
+  }
+
+  static Future<bool> setOfficeLatitude(double lat) async {
+    return await _prefs.setDouble('cfg_office_latitude', lat);
+  }
+
+  static double getOfficeLongitude() {
+    return _prefs.getDouble('cfg_office_longitude') ?? 77.5946;
+  }
+
+  static Future<bool> setOfficeLongitude(double lng) async {
+    return await _prefs.setDouble('cfg_office_longitude', lng);
+  }
+
+  static double getOfficeRadius() {
+    return _prefs.getDouble('cfg_office_radius') ?? 200.0;
+  }
+
+  static Future<bool> setOfficeRadius(double radius) async {
+    return await _prefs.setDouble('cfg_office_radius', radius);
+  }
+
   // ----------------- PENDING ATTENDANCE EVENTS (FIFO) -----------------
 
   static List<AttendanceEvent> getPendingEvents() {

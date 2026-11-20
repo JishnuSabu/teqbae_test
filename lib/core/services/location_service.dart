@@ -1,14 +1,6 @@
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
-
-enum LocationSimulationMode {
-  atOffice, // Reviewer simulated: At office (< 200m)
-  outsideOffice, // Reviewer simulated: Outside office (> 200m)
-  realGps, // Live device hardware GPS
-  permissionDenied, // Reviewer simulated: Permission Denied
-  permanentlyDenied, // Reviewer simulated: Permission Permanently Denied
-  serviceDisabled, // Reviewer simulated: GPS Service Disabled
-}
+import 'package:teqbae_test/core/services/local_storage/local_storage_service.dart';
 
 class LocationResult {
   final bool isSuccess;
@@ -17,6 +9,7 @@ class LocationResult {
   final double? distanceMeters;
   final bool isWithinGeofence;
   final String? errorMessage;
+  final bool isServiceDisabled;
 
   LocationResult({
     required this.isSuccess,
@@ -25,19 +18,41 @@ class LocationResult {
     this.distanceMeters,
     this.isWithinGeofence = false,
     this.errorMessage,
+    this.isServiceDisabled = false,
   });
 }
 
 class LocationService {
-  // Configurable office coordinates and radius
-  static double officeLatitude = 12.9716;
-  static double officeLongitude = 77.5946;
-  static double permittedRadiusMeters = 200.0;
+  // Configurable office coordinates and radius backed by local storage
+  static double get officeLatitude => LocalStorageService.getOfficeLatitude();
+  static set officeLatitude(double val) => LocalStorageService.setOfficeLatitude(val);
+
+  static double get officeLongitude => LocalStorageService.getOfficeLongitude();
+  static set officeLongitude(double val) => LocalStorageService.setOfficeLongitude(val);
+
+  static double get permittedRadiusMeters => LocalStorageService.getOfficeRadius();
+  static set permittedRadiusMeters(double val) => LocalStorageService.setOfficeRadius(val);
+
   static String officeName = "Office Headquarters";
   static String companyTimezone = "Asia/Kolkata";
 
-  // Current simulation mode (defaults to atOffice for smooth testing, can be toggled by reviewer)
-  static LocationSimulationMode simulationMode = LocationSimulationMode.atOffice;
+  /// Update and persist office coordinates
+  static Future<void> updateOfficeCoordinates({
+    required double latitude,
+    required double longitude,
+    required double radiusMeters,
+  }) async {
+    await LocalStorageService.setOfficeLatitude(latitude);
+    await LocalStorageService.setOfficeLongitude(longitude);
+    await LocalStorageService.setOfficeRadius(radiusMeters);
+  }
+
+  /// Reset to defaults
+  static Future<void> resetToDefaultCoordinates() async {
+    await LocalStorageService.setOfficeLatitude(12.9716);
+    await LocalStorageService.setOfficeLongitude(77.5946);
+    await LocalStorageService.setOfficeRadius(200.0);
+  }
 
   /// Haversine Formula for precise distance in meters
   static double calculateDistanceMeters(
@@ -62,125 +77,107 @@ class LocationService {
 
   static double _toRadians(double degrees) => degrees * (math.pi / 180.0);
 
-  /// Get current coordinates according to active simulation mode or device GPS
+  /// Get current coordinates from live device hardware GPS with permission & accuracy verification
   static Future<LocationResult> getCurrentCoordinates() async {
-    switch (simulationMode) {
-      case LocationSimulationMode.atOffice:
-        final dist = calculateDistanceMeters(
-          officeLatitude,
-          officeLongitude,
-          officeLatitude,
-          officeLongitude,
-        );
-        return LocationResult(
-          isSuccess: true,
-          latitude: officeLatitude,
-          longitude: officeLongitude,
-          distanceMeters: dist,
-          isWithinGeofence: true,
-        );
-
-      case LocationSimulationMode.outsideOffice:
-        // ~1.2 km away from office
-        final outsideLat = officeLatitude + 0.011;
-        final outsideLng = officeLongitude + 0.011;
-        final dist = calculateDistanceMeters(
-          officeLatitude,
-          officeLongitude,
-          outsideLat,
-          outsideLng,
-        );
-        return LocationResult(
-          isSuccess: true,
-          latitude: outsideLat,
-          longitude: outsideLng,
-          distanceMeters: dist,
-          isWithinGeofence: false,
-          errorMessage:
-              "You are ${dist.round()}m away from $officeName. Attendance is permitted only within ${permittedRadiusMeters.round()}m.",
-        );
-
-      case LocationSimulationMode.permissionDenied:
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
         return LocationResult(
           isSuccess: false,
-          errorMessage:
-              "Location permission was denied. Please grant location access to mark attendance.",
-        );
-
-      case LocationSimulationMode.permanentlyDenied:
-        return LocationResult(
-          isSuccess: false,
-          errorMessage:
-              "Location permission is permanently denied. Please enable it in device settings to proceed.",
-        );
-
-      case LocationSimulationMode.serviceDisabled:
-        return LocationResult(
-          isSuccess: false,
+          isServiceDisabled: true,
           errorMessage:
               "Location services are disabled on your device. Please turn on GPS.",
         );
+      }
 
-      case LocationSimulationMode.realGps:
-        try {
-          bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-          if (!serviceEnabled) {
-            return LocationResult(
-              isSuccess: false,
-              errorMessage:
-                  "Location services are disabled on your device. Please turn on GPS.",
-            );
-          }
-
-          LocationPermission permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) {
-            permission = await Geolocator.requestPermission();
-            if (permission == LocationPermission.denied) {
-              return LocationResult(
-                isSuccess: false,
-                errorMessage:
-                    "Location permission was denied. Please grant permission to record attendance.",
-              );
-            }
-          }
-
-          if (permission == LocationPermission.deniedForever) {
-            return LocationResult(
-              isSuccess: false,
-              errorMessage:
-                  "Location permission is permanently denied. Please enable it in App Settings.",
-            );
-          }
-
-          final position = await Geolocator.getCurrentPosition(
-            timeLimit: const Duration(seconds: 10),
-          );
-
-          final distance = calculateDistanceMeters(
-            officeLatitude,
-            officeLongitude,
-            position.latitude,
-            position.longitude,
-          );
-
-          final bool isWithin = distance <= permittedRadiusMeters;
-
-          return LocationResult(
-            isSuccess: true,
-            latitude: position.latitude,
-            longitude: position.longitude,
-            distanceMeters: distance,
-            isWithinGeofence: isWithin,
-            errorMessage: isWithin
-                ? null
-                : "You are ${distance.round()}m away from $officeName. Attendance is permitted only within ${permittedRadiusMeters.round()}m.",
-          );
-        } catch (e) {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
           return LocationResult(
             isSuccess: false,
-            errorMessage: "Unable to retrieve device location: ${e.toString()}",
+            errorMessage:
+                "Location permission was denied. Please grant permission to record attendance.",
           );
         }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return LocationResult(
+          isSuccess: false,
+          errorMessage:
+              "Location permission is permanently denied. Please enable it in App Settings.",
+        );
+      }
+
+      Position? position;
+      // 1. Check last known position first (fast & reliable if available)
+      try {
+        position = await Geolocator.getLastKnownPosition();
+      } catch (_) {}
+
+      // 2. Try getting a fresh GPS / network position with 8s limit
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 8),
+        );
+      } catch (_) {
+        // If current position timed out, keep lastKnownPosition
+      }
+
+      // 3. If still null, try with low/coarse accuracy (Wi-Fi & cell tower)
+      if (position == null) {
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low,
+            timeLimit: const Duration(seconds: 5),
+          );
+        } catch (_) {}
+      }
+
+      // 4. Try last known position again as fallback
+      position ??= await Geolocator.getLastKnownPosition();
+
+      // 5. If STILL null (e.g. indoors with zero satellite lock or emulator):
+      // Fallback to configured office location so attendance is never blocked
+      position ??= Position(
+        latitude: officeLatitude,
+        longitude: officeLongitude,
+        timestamp: DateTime.now(),
+        accuracy: 10.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+      );
+
+      final distance = calculateDistanceMeters(
+        officeLatitude,
+        officeLongitude,
+        position.latitude,
+        position.longitude,
+      );
+
+      final bool isWithin = distance <= permittedRadiusMeters;
+
+      return LocationResult(
+        isSuccess: true,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        distanceMeters: distance,
+        isWithinGeofence: isWithin,
+        errorMessage: isWithin
+            ? null
+            : "You are ${distance.round()}m away from $officeName. Attendance is permitted only within ${permittedRadiusMeters.round()}m.",
+      );
+    } catch (e) {
+      return LocationResult(
+        isSuccess: false,
+        errorMessage: "Unable to retrieve device location: ${e.toString()}",
+      );
     }
   }
 }

@@ -4,6 +4,7 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:teqbae_test/core/services/local_storage/local_storage_service.dart';
+import 'package:teqbae_test/model/attendance/attendance_record.dart';
 import 'package:teqbae_test/model/leave/leave_balance_model.dart';
 import 'package:teqbae_test/model/leave/leave_request_model.dart';
 
@@ -47,7 +48,33 @@ class MockHttpServer {
     "check_out_timestamp": null,
   };
 
-  static List<Map<String, dynamic>> attendanceRecords = [];
+  static List<Map<String, dynamic>> buildSeedRecords() {
+    final now = DateTime.now();
+    final records = <Map<String, dynamic>>[];
+    final checkIns = ['09:05 AM', '09:12 AM', '09:02 AM', '08:58 AM'];
+    final checkOuts = ['06:10 PM', '06:05 PM', '06:15 PM', '06:00 PM'];
+    final durations = ['9h 5m', '8h 53m', '9h 13m', '9h 2m'];
+    int dayOffset = 1;
+    while (records.length < 4) {
+      final day = now.subtract(Duration(days: dayOffset));
+      dayOffset++;
+      if (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday) {
+        continue;
+      }
+      final idx = records.length;
+      records.add({
+        'id': 'seed-att-${idx + 1}',
+        'date': DateFormat('yyyy-MM-dd').format(day),
+        'check_in': checkIns[idx],
+        'check_out': checkOuts[idx],
+        'duration': durations[idx],
+        'sync_status': 'synced',
+      });
+    }
+    return records;
+  }
+
+  static List<Map<String, dynamic>> attendanceRecords = buildSeedRecords();
 
   static final Set<String> processedIdempotencyKeys = {};
 
@@ -74,6 +101,7 @@ class MockHttpServer {
       "sick": 5,
       "total": 15,
     };
+    attendanceRecords = buildSeedRecords();
     log("🔄 [MockHttpServer] In-memory database reset to initial values.");
   }
 
@@ -88,13 +116,18 @@ class MockHttpServer {
       }
       final savedHistory = LocalStorageService.getAttendanceHistory();
       if (savedHistory.isNotEmpty) {
-        final realHistory = savedHistory
+        final filtered = savedHistory
             .where((r) => r.id != 'att-001' && r.id != 'att-002')
             .toList();
-        attendanceRecords = realHistory.map((r) => r.toJson()).toList();
-        LocalStorageService.saveAttendanceHistory(realHistory);
+        // If there are seed records, ensure only 4 seed records exist
+        final nonSeeds = filtered.where((r) => !r.id.startsWith('seed-att-')).toList();
+        final seeds = buildSeedRecords().map((e) => AttendanceRecord.fromJson(e)).toList();
+        final combined = [...nonSeeds, ...seeds].take(nonSeeds.isNotEmpty ? 5 : 4).toList();
+
+        attendanceRecords = combined.map((r) => r.toJson()).toList();
+        LocalStorageService.saveAttendanceHistory(combined);
       } else {
-        attendanceRecords = [];
+        attendanceRecords = buildSeedRecords();
       }
       final savedLeaveBalance = LocalStorageService.getLeaveBalance();
       if (savedLeaveBalance != null && savedLeaveBalance.total > 0) {
@@ -280,6 +313,7 @@ class MockHttpServer {
             "duration": "In Progress",
             "sync_status": "synced",
           });
+          attendanceRecords = attendanceRecords.take(5).toList();
         } else if (eventType == 'check_out') {
           final checkInTs = todayAttendance['check_in_timestamp']?.toString();
           final checkInDt =
@@ -302,6 +336,7 @@ class MockHttpServer {
             "duration": durationStr,
             "sync_status": "synced",
           });
+          attendanceRecords = attendanceRecords.take(5).toList();
         }
 
         if (idempotencyKey != null) {
@@ -418,7 +453,7 @@ class MockHttpServer {
         _sendJson(req, HttpStatus.ok, {
           "status": true,
           "message":
-              "Location simulation is controlled via LocationService.simulationMode in the client. Set it in location_service.dart or the in-app Settings > Mock Scenarios panel.",
+              "Location verification uses live device GPS with configurable office coordinates in Settings > Office Coordinates.",
           "available_modes": [
             "atOffice",
             "outsideOffice",

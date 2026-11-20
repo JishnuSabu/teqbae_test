@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 import 'package:teqbae_test/controller/service/attendance/attendance_service.dart';
 import 'package:teqbae_test/core/network/api_response.dart';
+import 'package:teqbae_test/core/network/mock_http_server.dart';
 import 'package:teqbae_test/core/services/local_storage/local_storage_service.dart';
 import 'package:teqbae_test/core/services/location_service.dart';
 import 'package:teqbae_test/core/sync/sync_service.dart';
@@ -15,11 +16,13 @@ class AttendanceActionResult {
   final bool isSuccess;
   final String message;
   final bool isSavedOffline;
+  final bool isLocationDisabled;
 
   AttendanceActionResult({
     required this.isSuccess,
     required this.message,
     this.isSavedOffline = false,
+    this.isLocationDisabled = false,
   });
 }
 
@@ -42,6 +45,12 @@ class AttendanceProvider extends ChangeNotifier {
   DateTime? _checkInDateTime;
   Duration _elapsedWorkingDuration = Duration.zero;
   Timer? _elapsedTimer;
+
+  // Last captured GPS coordinates
+  double? _lastCheckInLatitude;
+  double? _lastCheckInLongitude;
+  double? get lastCheckInLatitude => _lastCheckInLatitude;
+  double? get lastCheckInLongitude => _lastCheckInLongitude;
 
   // History and pending
   List<AttendanceRecord> _records = [];
@@ -143,6 +152,15 @@ class AttendanceProvider extends ChangeNotifier {
       }
     }
 
+    final nonSeeds = _records.where((r) => !r.id.startsWith('seed-att-')).toList();
+    final seeds = MockHttpServer.buildSeedRecords()
+        .map((e) => AttendanceRecord.fromJson(e))
+        .toList();
+    final bool hasToday = _todayStatus == 'checked_in' ||
+        _todayStatus == 'checked_out' ||
+        nonSeeds.any((r) => r.date == todayDateStr);
+    _records = [...nonSeeds, ...seeds].take(hasToday ? 5 : 4).toList();
+
     _updateElapsedTimer();
   }
 
@@ -228,6 +246,11 @@ class AttendanceProvider extends ChangeNotifier {
             _records = serverRecords;
           }
 
+          final bool hasToday = localTodayRecord != null ||
+              _todayStatus == 'checked_in' ||
+              _todayStatus == 'checked_out';
+          _records = _records.take(hasToday ? 5 : 4).toList();
+
           await LocalStorageService.saveAttendanceHistory(_records);
         }
       }
@@ -294,6 +317,7 @@ class AttendanceProvider extends ChangeNotifier {
       if (!locationResult.isSuccess) {
         return AttendanceActionResult(
           isSuccess: false,
+          isLocationDisabled: locationResult.isServiceDisabled,
           message: locationResult.errorMessage ?? "Failed to acquire location.",
         );
       }
@@ -323,6 +347,8 @@ class AttendanceProvider extends ChangeNotifier {
       _todayStatus = 'checked_in';
       _checkInTime = formattedTime;
       _checkInDateTime = now;
+      _lastCheckInLatitude = locationResult.latitude;
+      _lastCheckInLongitude = locationResult.longitude;
       _updateElapsedTimer();
 
       // Immediately add/update today's record in history
@@ -336,6 +362,7 @@ class AttendanceProvider extends ChangeNotifier {
       );
       _records.removeWhere((r) => r.date == todayStr);
       _records.insert(0, todayRecord);
+      _records = _records.take(5).toList();
 
       await LocalStorageService.addPendingEvent(event);
       await LocalStorageService.saveAttendanceHistory(_records);
@@ -404,6 +431,7 @@ class AttendanceProvider extends ChangeNotifier {
       if (!locationResult.isSuccess) {
         return AttendanceActionResult(
           isSuccess: false,
+          isLocationDisabled: locationResult.isServiceDisabled,
           message: locationResult.errorMessage ?? "Failed to acquire location.",
         );
       }
@@ -453,6 +481,7 @@ class AttendanceProvider extends ChangeNotifier {
       );
       _records.removeWhere((r) => r.date == todayStr);
       _records.insert(0, todayRecord);
+      _records = _records.take(5).toList();
 
       await LocalStorageService.addPendingEvent(event);
       await LocalStorageService.saveAttendanceHistory(_records);

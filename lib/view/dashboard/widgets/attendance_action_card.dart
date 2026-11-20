@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_packages/flutter_local_packages.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:teqbae_test/controller/provider/attendance/attendance_provider.dart';
 import 'package:teqbae_test/controller/provider/dashboard_provider.dart';
 import 'package:teqbae_test/core/constants/assets/const_svg.dart';
+import 'package:teqbae_test/core/services/location_service.dart';
 import 'package:teqbae_test/core/themes/color/color_theme_genarator.dart';
 import 'package:teqbae_test/core/themes/text/app_text.dart';
 import 'package:teqbae_test/core/utils/ui_utils.dart';
@@ -60,6 +62,72 @@ class AttendanceActionCard extends StatelessWidget {
               "OK",
               style: TextStyle(
                 color: context.themeColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTurnOnLocationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.mainCardColor,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.rf(context))),
+        title: Row(
+          children: [
+            Icon(
+              Icons.location_off_rounded,
+              color: context.failureColor,
+              size: 26.rf(context),
+            ),
+            SizedBox(width: 8.rw(context)),
+            Text(
+              "Turn On Location",
+              style: TextStyle(
+                fontSize: 16.rf(context),
+                fontWeight: FontWeight.bold,
+                color: context.mainTextColor,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "Location services (GPS) are turned off on your device. Please turn on location to record your attendance.",
+          style: TextStyle(
+            fontSize: 14.rf(context),
+            color: context.textColor2,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              "Cancel",
+              style: TextStyle(
+                color: context.primaryGreyColor,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Geolocator.openLocationSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.themeColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.rf(context)),
+              ),
+            ),
+            child: const Text(
+              "Turn On",
+              style: TextStyle(
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -158,8 +226,12 @@ class AttendanceActionCard extends StatelessWidget {
                             final result =
                                 await attendanceProvider.performCheckIn();
                             if (context.mounted) {
-                              _showResultDialog(context, result.message,
-                                  isSuccess: result.isSuccess);
+                              if (result.isLocationDisabled) {
+                                _showTurnOnLocationDialog(context);
+                              } else {
+                                _showResultDialog(context, result.message,
+                                    isSuccess: result.isSuccess);
+                              }
                             }
                           }
                         : null,
@@ -242,8 +314,12 @@ class AttendanceActionCard extends StatelessWidget {
                             final result =
                                 await attendanceProvider.performCheckOut();
                             if (context.mounted) {
-                              _showResultDialog(context, result.message,
-                                  isSuccess: result.isSuccess);
+                              if (result.isLocationDisabled) {
+                                _showTurnOnLocationDialog(context);
+                              } else {
+                                _showResultDialog(context, result.message,
+                                    isSuccess: result.isSuccess);
+                              }
                             }
                           }
                         : null,
@@ -336,14 +412,37 @@ class AttendanceActionCard extends StatelessWidget {
                 child: UiUtils.textWidgetCard(
                   context: context,
                   title: employee.office != null
-                      ? "${employee.office!.name} • ${employee.office!.radiusMeters.toInt()}m Geofence restricted"
-                      : "Office Geofence restricted",
+                      ? "${employee.office!.name} • ${LocationService.permittedRadiusMeters.toInt()}m Geofence restricted"
+                      : "Office • ${LocationService.permittedRadiusMeters.toInt()}m Geofence restricted",
                   styleType: TextStyleType.extraSmallRegular,
                   color: context.primaryGreyColor,
                 ),
               ),
             ],
           ),
+          if (attendanceProvider.lastCheckInLatitude != null &&
+              attendanceProvider.lastCheckInLongitude != null) ...[
+            SizedBox(height: 4.rh(context)),
+            Row(
+              children: [
+                Icon(
+                  Icons.gps_fixed,
+                  size: 11.rf(context),
+                  color: context.successColor,
+                ),
+                SizedBox(width: 4.rw(context)),
+                Expanded(
+                  child: UiUtils.textWidgetCard(
+                    context: context,
+                    title:
+                        "GPS: ${attendanceProvider.lastCheckInLatitude!.toStringAsFixed(5)}, ${attendanceProvider.lastCheckInLongitude!.toStringAsFixed(5)}",
+                    styleType: TextStyleType.extraSmallRegular,
+                    color: context.successColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

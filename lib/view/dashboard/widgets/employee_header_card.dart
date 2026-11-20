@@ -15,20 +15,7 @@ class EmployeeHeaderCard extends StatelessWidget {
     final dashboardProvider = context.watch<DashboardProvider>();
     final employee = dashboardProvider.employee;
 
-    String simLabel = "Office GPS (Simulated)";
-    if (LocationService.simulationMode ==
-        LocationSimulationMode.outsideOffice) {
-      simLabel = "Outside Office (>200m)";
-    } else if (LocationService.simulationMode ==
-        LocationSimulationMode.realGps) {
-      simLabel = "Live Device GPS";
-    } else if (LocationService.simulationMode ==
-        LocationSimulationMode.permissionDenied) {
-      simLabel = "Permission Denied (Sim)";
-    } else if (LocationService.simulationMode ==
-        LocationSimulationMode.serviceDisabled) {
-      simLabel = "GPS Disabled (Sim)";
-    }
+    const String simLabel = "Live Device GPS";
 
     return Container(
       width: double.infinity,
@@ -132,10 +119,7 @@ class EmployeeHeaderCard extends StatelessWidget {
                 padding: EdgeInsets.symmetric(
                     horizontal: 6.rw(context), vertical: 2.rh(context)),
                 decoration: BoxDecoration(
-                  color: LocationService.simulationMode ==
-                          LocationSimulationMode.atOffice
-                      ? context.successColor.withOpacity(0.12)
-                      : context.failureColor.withOpacity(0.12),
+                  color: context.successColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -143,10 +127,7 @@ class EmployeeHeaderCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 9.rf(context),
                     fontWeight: FontWeight.w600,
-                    color: LocationService.simulationMode ==
-                            LocationSimulationMode.atOffice
-                        ? context.successColor
-                        : context.failureColor,
+                    color: context.successColor,
                   ),
                 ),
               ),

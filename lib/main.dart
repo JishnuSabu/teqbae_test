@@ -1,3 +1,5 @@
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +16,29 @@ import 'package:teqbae_test/core/themes/app_theme_style.dart';
 void runMainApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalStorageService.init();
+
+  // Safely handle google_fonts offline / fetch exceptions
+  PlatformDispatcher.instance.onError = (error, stack) {
+    final errStr = error.toString();
+    final stackStr = stack.toString();
+    if (errStr.contains('google_fonts') ||
+        errStr.contains('fonts.gstatic.com') ||
+        stackStr.contains('google_fonts')) {
+      return true; // Handled gracefully
+    }
+    return false;
+  };
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final errStr = details.exception.toString();
+    final stackStr = details.stack.toString();
+    if (errStr.contains('google_fonts') ||
+        errStr.contains('fonts.gstatic.com') ||
+        stackStr.contains('google_fonts')) {
+      return; // Handled gracefully
+    }
+    FlutterError.presentError(details);
+  };
 
   // Initialize network monitor for auto-sync
   SyncService().initConnectivityMonitor(

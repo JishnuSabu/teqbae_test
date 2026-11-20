@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_packages/flutter_local_packages.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:teqbae_test/controller/provider/attendance/attendance_provider.dart';
 import 'package:teqbae_test/controller/provider/dashboard_provider.dart';
 import 'package:teqbae_test/controller/provider/leave/leave_provider.dart';
@@ -20,6 +21,75 @@ import 'package:provider/provider.dart';
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
+  Future<void> _checkLocation(BuildContext context) async {
+    final isEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!isEnabled && context.mounted) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: context.mainCardColor,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.rf(context))),
+          title: Row(
+            children: [
+              Icon(
+                Icons.location_off_rounded,
+                color: context.failureColor,
+                size: 26.rf(context),
+              ),
+              SizedBox(width: 8.rw(context)),
+              Text(
+                "Turn On Location",
+                style: TextStyle(
+                  fontSize: 16.rf(context),
+                  fontWeight: FontWeight.bold,
+                  color: context.mainTextColor,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            "Location services (GPS) are turned off on your device. Please turn on location to record your attendance.",
+            style: TextStyle(
+              fontSize: 14.rf(context),
+              color: context.textColor2,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                "Cancel",
+                style: TextStyle(
+                  color: context.primaryGreyColor,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await Geolocator.openLocationSettings();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.themeColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.rf(context)),
+                ),
+              ),
+              child: const Text(
+                "Turn On",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _loadData(BuildContext context) async {
     final dashboardProvider = context.read<DashboardProvider>();
     final attendanceProvider = context.read<AttendanceProvider>();
@@ -29,6 +99,9 @@ class DashboardScreen extends StatelessWidget {
       attendanceProvider.fetchAttendanceHistory(),
       leaveProvider.fetchLeaveData(),
     ]);
+    if (context.mounted) {
+      _checkLocation(context);
+    }
   }
 
   @override
